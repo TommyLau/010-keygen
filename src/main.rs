@@ -395,8 +395,34 @@ fn main() {
         }
         print!("{:02X}", v);
     }
+    println!("\n");
     // print!("-{:2X}", 0xd9 ^ p[4]);
     // println!("{:2X}", 0x95 ^ p[5]);
-    let key = generate_time_license("Tommy Lau", 20000, 1000);
+    // Expiration: Dec 31, 2099
+    static EXP: u32 = 47480;
+    let a: Vec<String> = std::env::args().collect();
+    let exp = if a.len() > 1 {
+        match a[1].parse::<u32>() {
+            Ok(v) => v,
+            _ => EXP,
+        }
+    } else { EXP };
+    println!("Exp: {}", exp);
+    let key = generate_time_license("Tommy Lau", exp, 1000);
     println!("Key: {}", key);
 }
+
+/*
+enum ReleaseDaystamp {
+        Version12 = 18887,
+        Version11 = 18535,
+        Version10 = 18236,
+        Version9 = 17814,
+        Version8 = 17289,
+        Version7 = 16883,
+        Version6 = 16420,
+        Version5 = 15880,
+        Version4 = 15474,
+        Version3 = 14018
+    };
+ */
