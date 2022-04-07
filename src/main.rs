@@ -207,9 +207,9 @@ fn keygen(UserName: &str, LicenseType: u32, UserCounts: u32) -> String
     Key[3] = 0xAC;
     let MagicNumber = magic_calculation(UserName, SI);
 
-    Key[4] = (MagicNumber & 0xFF);
+    Key[4] = MagicNumber & 0xFF;
 
-    Key[5] = ((MagicNumber >> 0x8) & 0xFF);
+    Key[5] = (MagicNumber >> 0x8) & 0xFF;
 
     Key[6] = (MagicNumber >> 0x10) & 0xFF;
 
@@ -242,6 +242,116 @@ fn keygen(UserName: &str, LicenseType: u32, UserCounts: u32) -> String
     }
 
     return KeyString;
+}
+
+fn CalulateChecksum(utf8_UserName: &str, IsRegistrationVersion: bool, a3: u32, LicenseCount: u32) -> Result<u32, String> {
+    let mut result = 0;
+    let mut unk0 = (17 * a3 as usize) % 0x100;
+    let mut unk1 = (15 * LicenseCount as usize) % 0x100;
+    let mut j = 0usize;
+    let utf8_UserName = utf8_UserName.to_uppercase();
+    let utf8_UserName = utf8_UserName.as_bytes();
+    for i in 0..utf8_UserName.len() {
+        let cur = utf8_UserName[i] as usize;
+        let temp = (result + TABLE[cur]) % 0x100000000;
+        if IsRegistrationVersion {
+            result = TABLE[j] + TABLE[unk1] +
+                TABLE[unk0] +
+                TABLE[(cur + 0x2F) % 256] * (temp ^ TABLE[(cur + 0xD) % 256]);
+            j += 19;
+        } else {
+            result = TABLE[j] + TABLE[unk1] +
+                TABLE[unk0] +
+                TABLE[(cur + 0x17) % 256] * (temp ^ TABLE[(cur + 0x3F) % 256]);
+            j += 7;
+        }
+        unk1 += 13;
+        unk0 += 9;
+        unk1 %= 0x100;
+        unk0 %= 0x100;
+        result %= 0x100000000;
+    }
+
+    Ok(result as u32)
+}
+
+fn EncodeExpireDate(DaystampOfExpiration: u32, Seed: u32) -> Result<u32, String> {
+    if DaystampOfExpiration >= 0x1000000 {
+        return Err("Days exceed 0x1000000".into());
+    }
+
+    let mut result = DaystampOfExpiration * 0x11;
+    while result < 0xFF000000 {
+        result += 0x1000000;
+    }
+
+    loop {
+        let mut temp = result;
+        temp ^= 0xFFE53167;
+        temp += 0x2C175;
+        temp ^= 0x22C078;
+        temp ^= Seed;
+
+        if temp >= 0x1000000 {
+            result += 0x1000000;
+            continue;
+        } else {
+            result = temp;
+            break;
+        }
+    }
+
+    Ok(result)
+}
+
+fn EncodeLicenseCount(DesiredLicenseCount: u32) -> Result<u16, String> {
+    if DesiredLicenseCount > 1000 || DesiredLicenseCount == 0 {
+        return Err("Desired license count incorrect".into());
+    }
+
+    let ret = (DesiredLicenseCount * 11) % 0x10000;
+    let mut ret = ret as i16;
+    ret ^= 0x3421;
+    ret -= 0x4d30;
+    ret ^= 0x7892;
+    // ret %= 0x10000;
+
+    Ok(ret as u16)
+}
+
+fn generate_time_license(UserName: &str, DaystampOfExpiration: u32, LicenseCount: u32) -> String {
+    let EncodedExpireDaystamp = EncodeExpireDate(DaystampOfExpiration, 0x5B8C27).unwrap();
+    let EncodedExpireDaystampBytes = EncodedExpireDaystamp.to_le_bytes();
+    let PasswordChecksum = CalulateChecksum(UserName, true, DaystampOfExpiration, LicenseCount).unwrap();
+    let PasswordChecksumBytes = PasswordChecksum.to_le_bytes();
+    let mut Password = [0u8; 10];
+    for i in 0..PasswordChecksumBytes.len() {
+        Password[4 + i] = PasswordChecksumBytes[i];
+    }
+
+    Password[0] = EncodedExpireDaystampBytes[0] ^ Password[6];
+    Password[8] = EncodedExpireDaystampBytes[1] ^ Password[4];
+    Password[9] = EncodedExpireDaystampBytes[2] ^ Password[5];
+
+    let EncodedLicenseCount = EncodeLicenseCount(LicenseCount).unwrap();
+    let EncodedLicenseCountBytes = EncodedLicenseCount.to_le_bytes();
+    Password[1] = EncodedLicenseCountBytes[1] ^ Password[7];
+    Password[2] = EncodedLicenseCountBytes[0] ^ Password[5];
+
+    // Type
+    Password[3] = 0xAC;
+
+    println!("\n\n------ Password: {:?}", Password);
+
+    let mut ret = "".to_string();
+    for (i, v) in Password.iter().enumerate() {
+        if i % 2 == 0 && i != 0 {
+            ret += "-";
+        }
+        ret += format!("{:02X}", v).as_str();
+    }
+
+    ret
 }
 
 fn main() {
@@ -287,4 +397,6 @@ fn main() {
     }
     // print!("-{:2X}", 0xd9 ^ p[4]);
     // println!("{:2X}", 0x95 ^ p[5]);
+    let key = generate_time_license("Tommy Lau", 20000, 1000);
+    println!("Key: {}", key);
 }
