@@ -98,6 +98,152 @@ fn magic_number(users: u64) -> u64 {
     }
 }
 
+fn magic_calculation(UserName: &str, UserCounts: u32) -> u32 {
+    let EBPMinus8 = 0xC22Eu32;
+    let EBPMinus5 = 1u32;
+    let Local1 = UserName.as_bytes();
+    let mut Local3 = 0;
+
+    let mut Local5 = (UserCounts << 4) - UserCounts;
+    let mut Local6 = EBPMinus8 + (EBPMinus8 << 4);
+    let mut Local8 = 0u32;
+
+    let mut Length = UserName.len();
+
+    if Length == 0 {
+        return 0;
+    }
+
+    let mut Local4 = 1u32; // 循环计数
+    let mut EDX = 0u32;
+    let mut ECX = 0;
+    let mut EDI = 0;
+    let mut Local7 = 0;
+    while Length != 0 {
+        let mut AL = Local1[Local4 as usize - 1];
+        if AL >= 0x61 && AL <= 0x7A {
+            AL -= 0x20;
+        }
+
+        EDX = Local7 & 0xFF;
+        EDX = TABLE[EDX as usize] as u32;
+
+
+        ECX = Local5 & 0xFF;
+        EDX += TABLE[ECX as usize] as u32;
+
+
+        ECX = Local6 & 0xFF;
+        let j = EDX as u64 + TABLE[ECX as usize];
+        let k = j % 0x100000000;
+        // EDX += TABLE[ECX as usize] as u32;
+        EDX = k as u32;
+
+
+        ECX = AL as u32;
+        EDI = TABLE[ECX as usize + 0xD] as u32;
+
+
+        ECX = AL as u32;
+        ECX = TABLE[ECX as usize] as u32;
+        let h = ECX as u64 + Local3 as u64;
+        let i = h % 0x100000000;
+        // ECX += Local3;
+        ECX = i as u32;
+
+        EDI ^= ECX;
+        let a = EDI as u64;
+        let b = TABLE[AL as usize + 0x2F];
+        let c = a * b;
+        let d = c % 0x100000000;
+        println!("a: {:X}, b: {:X}, c: {:X}, d: {:X}", a, b, c, d);
+        // EDI = ((EDI as u64 * TABLE[AL as usize + 0x2F]) % 0x100000000) as u32;
+        EDI = d as u32;
+
+        println!("EDX: {:X}, EDI: {:X}", EDX, EDI);
+        let f = EDX as u64 + d;
+        let g = f % 0x100000000;
+        // EDX = EDX + EDI;
+        EDX = g as u32;
+        Local3 = EDX;
+
+
+        Local7 += 0x13;
+        Local8 += 0x7;
+        Local6 += 0x9;
+        Local5 += 0xD;
+        Local4 += 1;
+        Length -= 1;
+    }
+    return Local3;
+}
+
+fn keygen(UserName: &str, LicenseType: u32, UserCounts: u32) -> String
+{
+    let mut SI = 0;
+    let mut Key = [0; 10];
+    let mut KeyString = "".to_string();
+
+    if UserName.is_empty() || LicenseType > 2 {
+        return KeyString;
+    }
+
+    match LicenseType
+    {
+        // LICENSE_TYPE_SINGLE_USER:
+        1 => SI = 1,
+        // LICENSE_TYPE_SITE:
+        2 => SI = 0x3E8,
+        // LICENSE_TYPE_MULTI_USER:
+        _ => if SI == 0 || SI >= 1000 {
+            let mut rng = rand::thread_rng();
+            SI = rng.gen_range(1..1000);
+        } else {
+            SI = UserCounts;
+        }
+    }
+
+    let mut EDX = SI;
+    Key[3] = 0xAC;
+    let MagicNumber = magic_calculation(UserName, SI);
+
+    Key[4] = (MagicNumber & 0xFF);
+
+    Key[5] = ((MagicNumber >> 0x8) & 0xFF);
+
+    Key[6] = (MagicNumber >> 0x10) & 0xFF;
+
+    Key[7] = (MagicNumber >> 0x18) & 0xFF;
+
+    //let a = ((((SI as u128 * 0xB) ^ 0x3421) - 0x4D30) ^ 0x7892) % 0x100000000;
+    let a = SI as u64 * 0xB;
+    let b = a as i64 ^ 0x3421;
+    let c = b - 0x4D30;
+    let d = c ^ 0x7892;
+    // let EBX = (((((SI as u64 * 0xB) ^ 0x3421) - 0x4D30) ^ 0x7892) % 0x100000000) as u32;
+    let EBX = d as u32;
+    EDX = EBX;
+    EDX = EDX >> 8;
+
+    Key[1] = (EDX & 0xFF) ^ Key[7];
+
+    Key[2] = (EBX & 0xFF) ^ Key[5];
+
+
+    Key[0] = (0xFF95D981 & 0xFF) ^ Key[6];
+
+    Key[8] = ((0xFF95D981 >> 8) & 0xFF) ^ Key[4];
+
+    Key[9] = ((0xFF95D981 >> 0x10) & 0xFF) ^ Key[5];
+
+    for v in Key {
+        let s = format!("{:02X}", v).to_string();
+        KeyString += s.as_str();
+    }
+
+    return KeyString;
+}
+
 fn main() {
     println!("Hello, world!");
     let mut p = [0u64; 8];
@@ -112,6 +258,12 @@ fn main() {
     println!("v8, v9 = {}, {}", v8, v9);
     // let user = user_pro("Tommy Lau", true, 0, v9);
     let user = user_pro("Tommy Lau", true, 0, v9);
+    println!("old magic: {:X}", user);
+    let magic = magic_calculation("Tommy Lau", v9 as u32);
+    println!("new magic: {:X}", magic);
+    let key = keygen("Tommy Lau", 1, 1);
+    assert_eq!(key, "4589DFAC9CB7C4174522");
+    println!("New Key: {}", key);
     p[4] = user % 0x100;
     p[5] = (user >> 8) % 0x100;
     p[6] = (user >> 16) % 0x100;
