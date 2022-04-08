@@ -35,17 +35,14 @@ static TABLE: [u64; 256] = [
     0x5cff0261, 0x33ae061e, 0x3bb6345f, 0x5d814a75, 0x257b5df4, 0x0a5c2c5b, 0x16a45527, 0x16f23945
 ];
 
-fn CalulateChecksum(utf8_UserName: &str, IsRegistrationVersion: bool, a3: u32, LicenseCount: u32) -> Result<u32, String> {
+fn calculate_checksum(user_name: &str, registration_version: bool, a3: u32, license_count: u32) -> Result<u32, String> {
     let mut result = 0;
     let mut unk0 = (17 * a3 as usize) % 0x100;
-    let mut unk1 = (15 * LicenseCount as usize) % 0x100;
+    let mut unk1 = (15 * license_count as usize) % 0x100;
     let mut j = 0usize;
-    let utf8_UserName = utf8_UserName.to_uppercase();
-    let utf8_UserName = utf8_UserName.as_bytes();
-    for i in 0..utf8_UserName.len() {
-        let cur = utf8_UserName[i] as usize;
+    for cur in user_name.to_uppercase().bytes().map(|x| x as usize) {
         let temp = (result + TABLE[cur]) % 0x100000000;
-        if IsRegistrationVersion {
+        if registration_version {
             result = TABLE[j] + TABLE[unk1] +
                 TABLE[unk0] +
                 TABLE[(cur + 0x2F) % 256] * (temp ^ TABLE[(cur + 0xD) % 256]);
@@ -66,12 +63,12 @@ fn CalulateChecksum(utf8_UserName: &str, IsRegistrationVersion: bool, a3: u32, L
     Ok(result as u32)
 }
 
-fn EncodeExpireDate(DaystampOfExpiration: u32, Seed: u32) -> Result<u32, String> {
-    if DaystampOfExpiration >= 0x1000000 {
+fn encode_expire_date(daystamp_of_expiration: u32, seed: u32) -> Result<u32, String> {
+    if daystamp_of_expiration >= 0x1000000 {
         return Err("Days exceed 0x1000000".into());
     }
 
-    let mut result = DaystampOfExpiration * 0x11;
+    let mut result = daystamp_of_expiration * 0x11;
     while result < 0xFF000000 {
         result += 0x1000000;
     }
@@ -81,7 +78,7 @@ fn EncodeExpireDate(DaystampOfExpiration: u32, Seed: u32) -> Result<u32, String>
         temp ^= 0xFFE53167;
         temp += 0x2C175;
         temp ^= 0x22C078;
-        temp ^= Seed;
+        temp ^= seed;
 
         if temp >= 0x1000000 {
             result += 0x1000000;
@@ -95,12 +92,12 @@ fn EncodeExpireDate(DaystampOfExpiration: u32, Seed: u32) -> Result<u32, String>
     Ok(result)
 }
 
-fn EncodeLicenseCount(DesiredLicenseCount: u32) -> Result<u16, String> {
-    if DesiredLicenseCount > 1000 || DesiredLicenseCount == 0 {
+fn encode_license_count(desired_license_count: u32) -> Result<u16, String> {
+    if desired_license_count > 1000 || desired_license_count == 0 {
         return Err("Desired license count incorrect".into());
     }
 
-    let ret = (DesiredLicenseCount * 11) % 0x10000;
+    let ret = (desired_license_count * 11) % 0x10000;
     let mut ret = ret as i16;
     ret ^= 0x3421;
     ret -= 0x4d30;
@@ -110,30 +107,26 @@ fn EncodeLicenseCount(DesiredLicenseCount: u32) -> Result<u16, String> {
     Ok(ret as u16)
 }
 
-fn generate_time_license(UserName: &str, DaystampOfExpiration: u32, LicenseCount: u32) -> String {
-    let EncodedExpireDaystamp = EncodeExpireDate(DaystampOfExpiration, 0x5B8C27).unwrap();
-    let EncodedExpireDaystampBytes = EncodedExpireDaystamp.to_le_bytes();
-    let PasswordChecksum = CalulateChecksum(UserName, true, DaystampOfExpiration, LicenseCount).unwrap();
-    let PasswordChecksumBytes = PasswordChecksum.to_le_bytes();
-    let mut Password = [0u8; 10];
-    for i in 0..PasswordChecksumBytes.len() {
-        Password[4 + i] = PasswordChecksumBytes[i];
-    }
+fn generate_time_license(user_name: &str, daystamp_of_expiration: u32, license_count: u32) -> String {
+    let mut password = [0u8; 10];
 
-    Password[0] = EncodedExpireDaystampBytes[0] ^ Password[6];
-    Password[8] = EncodedExpireDaystampBytes[1] ^ Password[4];
-    Password[9] = EncodedExpireDaystampBytes[2] ^ Password[5];
+    let password_checksum = calculate_checksum(user_name, true, daystamp_of_expiration, license_count).unwrap().to_le_bytes();
+    password[4..8].clone_from_slice(&password_checksum);
 
-    let EncodedLicenseCount = EncodeLicenseCount(LicenseCount).unwrap();
-    let EncodedLicenseCountBytes = EncodedLicenseCount.to_le_bytes();
-    Password[1] = EncodedLicenseCountBytes[1] ^ Password[7];
-    Password[2] = EncodedLicenseCountBytes[0] ^ Password[5];
+    let encoded_expire_duration = encode_expire_date(daystamp_of_expiration, 0x5B8C27).unwrap().to_le_bytes();
+    password[0] = encoded_expire_duration[0] ^ password[6];
+    password[8] = encoded_expire_duration[1] ^ password[4];
+    password[9] = encoded_expire_duration[2] ^ password[5];
+
+    let encoded_license_count = encode_license_count(license_count).unwrap().to_le_bytes();
+    password[1] = encoded_license_count[1] ^ password[7];
+    password[2] = encoded_license_count[0] ^ password[5];
 
     // Type
-    Password[3] = 0xAC;
+    password[3] = 0xAC;
 
     let mut ret = "".to_string();
-    for (i, v) in Password.iter().enumerate() {
+    for (i, v) in password.iter().enumerate() {
         if i % 2 == 0 && i != 0 {
             ret += "-";
         }
