@@ -36,6 +36,19 @@ static TABLE: [u32; 256] = [
     0x5cff0261, 0x33ae061e, 0x3bb6345f, 0x5d814a75, 0x257b5df4, 0x0a5c2c5b, 0x16a45527, 0x16f23945
 ];
 
+fn format_password(password: &[u8]) -> String {
+    let mut ret = "".into();
+
+    for (i, v) in password.iter().enumerate() {
+        if i % 2 == 0 && i != 0 {
+            ret = format!("{}-", ret);
+        }
+        ret = format!("{}{:02X}", ret, v);
+    }
+
+    ret
+}
+
 fn calculate_checksum(user_name: &str, registration_version: bool, a3: u32, license_count: u16) -> Result<u32, String> {
     let mut result: u32 = 0;
     let mut unk0 = (a3 as u8).wrapping_mul(17);
@@ -106,6 +119,32 @@ fn encode_license_count(desired_license_count: u16) -> Result<u16, String> {
     Ok(ret)
 }
 
+fn generate_version_license(user_name: &str, license_count: u16, MajorVersion: u8) -> String {
+    let mut password = [0u8; 8];
+
+    let MajorVersion = MajorVersion + 1;
+
+    let password_checksum = calculate_checksum(
+        user_name, true,
+        if MajorVersion >= 2 { 0 } else { MajorVersion } as u32,
+        license_count).unwrap().to_le_bytes();
+    password[4..8].clone_from_slice(&password_checksum);
+
+    let encoded_license_count = encode_license_count(license_count).unwrap().to_le_bytes();
+    password[1] = encoded_license_count[1] ^ password[7];
+    password[2] = encoded_license_count[0] ^ password[5];
+
+    password[0] = MajorVersion
+        .bitxor(0xA7)
+        .wrapping_sub(0x3D)
+        .bitxor(0x18)
+        .bitxor(password[6]);
+
+    password[3] = 0x9C;
+
+    format_password(&password)
+}
+
 fn generate_time_license(user_name: &str, daystamp_of_expiration: u32, license_count: u16) -> String {
     let mut password = [0u8; 10];
 
@@ -121,18 +160,9 @@ fn generate_time_license(user_name: &str, daystamp_of_expiration: u32, license_c
     password[1] = encoded_license_count[1] ^ password[7];
     password[2] = encoded_license_count[0] ^ password[5];
 
-    // Type
     password[3] = 0xAC;
 
-    let mut ret = "".to_string();
-    for (i, v) in password.iter().enumerate() {
-        if i % 2 == 0 && i != 0 {
-            ret = format!("{}-", ret);
-        }
-        ret = format!("{}{:02X}", ret, v);
-    }
-
-    ret
+    format_password(&password)
 }
 
 fn main() {
@@ -149,9 +179,11 @@ fn main() {
     } else { duration_days };
 
     let username = "Tommy Lau";
-    let password = generate_time_license("Tommy Lau", expiration, 1000);
+    let time_license = generate_time_license("Tommy Lau", expiration, 1000);
+    let version_license = generate_version_license("Tommy Lau", 1000, 12);
     println!("Username: {}", username);
-    println!("Password: {}", password);
+    println!("Time License: {}", time_license);
+    println!("Version License: {}", version_license);
 }
 
 /*
