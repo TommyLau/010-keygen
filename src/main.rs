@@ -95,7 +95,7 @@ fn encode_expire_date(daystamp_of_expiration: u32, seed: u32) -> Result<u32, Str
             .bitxor(seed);
 
         if temp >= 0x1000000 {
-            result += 0x1000000;
+            result = result.wrapping_add(0x1000000);
         } else {
             result = temp;
             break;
@@ -119,14 +119,28 @@ fn encode_license_count(desired_license_count: u16) -> Result<u16, String> {
     Ok(ret)
 }
 
-fn generate_version_license(user_name: &str, license_count: u16, MajorVersion: u8) -> String {
+fn generate_evaluation_license(user_name: &str, daystamp_of_expiration: u32) -> String {
     let mut password = [0u8; 8];
 
-    let MajorVersion = MajorVersion + 1;
+    let password_checksum = calculate_checksum(user_name, false, 255, 1).unwrap();
+    password[4..8].clone_from_slice(&password_checksum.to_le_bytes());
+
+    let encoded_expire_duration = encode_expire_date(daystamp_of_expiration, password_checksum).unwrap().to_le_bytes();
+    password[..4].clone_from_slice(&encoded_expire_duration);
+
+    password[3] = 0xFC;
+
+    format_password(&password)
+}
+
+fn generate_version_license(user_name: &str, license_count: u16, major_version: u8) -> String {
+    let mut password = [0u8; 8];
+
+    let major_version = major_version + 1;
 
     let password_checksum = calculate_checksum(
         user_name, true,
-        if MajorVersion >= 2 { 0 } else { MajorVersion } as u32,
+        if major_version >= 2 { 0 } else { major_version } as u32,
         license_count).unwrap().to_le_bytes();
     password[4..8].clone_from_slice(&password_checksum);
 
@@ -134,7 +148,7 @@ fn generate_version_license(user_name: &str, license_count: u16, MajorVersion: u
     password[1] = encoded_license_count[1] ^ password[7];
     password[2] = encoded_license_count[0] ^ password[5];
 
-    password[0] = MajorVersion
+    password[0] = major_version
         .bitxor(0xA7)
         .wrapping_sub(0x3D)
         .bitxor(0x18)
@@ -179,11 +193,13 @@ fn main() {
     } else { duration_days };
 
     let username = "Tommy Lau";
-    let time_license = generate_time_license("Tommy Lau", expiration, 1000);
-    let version_license = generate_version_license("Tommy Lau", 1000, 12);
+    let time_license = generate_time_license(username, expiration, 1000);
+    let version_license = generate_version_license(username, 1000, 12);
+    let evaluation_license = generate_evaluation_license(username, expiration);
     println!("Username: {}", username);
     println!("Time License: {}", time_license);
     println!("Version License: {}", version_license);
+    println!("Evaluation License: {}", evaluation_license);
 }
 
 /*
