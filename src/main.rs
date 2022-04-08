@@ -1,3 +1,5 @@
+use chrono::{TimeZone, Utc};
+
 static TABLE: [u64; 256] = [
     0x39cb44b8, 0x23754f67, 0x5f017211, 0x3ebb24da, 0x351707c6, 0x63f9774b, 0x17827288, 0x0fe74821,
     0x5b5f670f, 0x48315ae8, 0x785b7769, 0x2b7a1547, 0x38d11292, 0x42a11b32, 0x35332244, 0x77437b60,
@@ -32,217 +34,6 @@ static TABLE: [u64; 256] = [
     0x65e04849, 0x1f526e1c, 0x5a0251b6, 0x2bd73f69, 0x2dbf7acd, 0x51e63e80, 0x5cf2670f, 0x21cd0a03,
     0x5cff0261, 0x33ae061e, 0x3bb6345f, 0x5d814a75, 0x257b5df4, 0x0a5c2c5b, 0x16a45527, 0x16f23945
 ];
-static DW: u64 = 0x100000000;
-
-fn user_pro(username: &str, a2: bool, a3: u64, a4: u64) -> u64 {
-    let username = username.to_uppercase();
-    let mut v16 = 0;
-    let length = username.len();
-    let mut i = 0;
-
-    if length <= 0 {
-        0
-    } else {
-        let mut v13: u64 = 0;
-        let mut v14: u64 = 0;
-        let mut v7 = (15 * a4) % 0x100;
-        let mut v15 = (17 * a3) % 0x100;
-        let username = username.as_bytes();
-        let mut result = 0;
-        while i < length {
-            let upperName_char = username[i];
-            let v9 = (v16 + TABLE[upperName_char as usize]) % DW;
-            if a2 {
-                let v10 = (TABLE[v7 as usize]
-                    + TABLE[v15 as usize]
-                    + TABLE[(upperName_char as usize + 47)]
-                    * (TABLE[(upperName_char as usize + 13)] ^ v9)) % DW;
-                result = (TABLE[v14 as usize] + v10) % DW;
-                v16 = (TABLE[v14 as usize] + v10) % DW;
-            } else {
-                let v12 = (TABLE[v7 as usize]
-                    + TABLE[v15 as usize]
-                    + TABLE[(upperName_char as usize + 23)]
-                    * (TABLE[(upperName_char as usize + 63)] ^ v9)) % DW;
-                result = (TABLE[v13 as usize] + v12) % DW;
-                v16 = (TABLE[v13 as usize] + v12) % DW;
-            }
-            v14 += 19;
-            v14 %= 0x100;
-            i += 1;
-            v15 += 9;
-            v15 %= 0x100;
-            v7 += 13;
-            v7 %= 0x100;
-            v13 += 7;
-            v13 %= 0x100;
-            println!("Result: {}", result);
-        }
-        result
-    }
-}
-
-use rand::Rng;
-
-fn magic_number(users: u64) -> u64 {
-    let mut rng = rand::thread_rng();
-    let counts = if users > 0 && users <= 1000 { users } else { rng.gen_range(1..1000) };
-    println!("counts = {}", counts);
-    loop {
-        let i: u64 = rng.gen_range(0..0x10000);
-        let v8 = ((((i ^ 0x7892) + 19760) ^ 0x3421) % 0x10000) % 11;
-        let v9 = ((((i ^ 0x7892) + 19760) ^ 0x3421) % 0x10000) / 11;
-        if v8 == 0 && v9 == counts {
-            return i;
-        }
-    }
-}
-
-fn magic_calculation(UserName: &str, UserCounts: u32) -> u32 {
-    let EBPMinus8 = 0xC22Eu32;
-    let EBPMinus5 = 1u32;
-    let Local1 = UserName.as_bytes();
-    let mut Local3 = 0;
-
-    let mut Local5 = (UserCounts << 4) - UserCounts;
-    let mut Local6 = EBPMinus8 + (EBPMinus8 << 4);
-    let mut Local8 = 0u32;
-
-    let mut Length = UserName.len();
-
-    if Length == 0 {
-        return 0;
-    }
-
-    let mut Local4 = 1u32; // 循环计数
-    let mut EDX = 0u32;
-    let mut ECX = 0;
-    let mut EDI = 0;
-    let mut Local7 = 0;
-    while Length != 0 {
-        let mut AL = Local1[Local4 as usize - 1];
-        if AL >= 0x61 && AL <= 0x7A {
-            AL -= 0x20;
-        }
-
-        EDX = Local7 & 0xFF;
-        EDX = TABLE[EDX as usize] as u32;
-
-
-        ECX = Local5 & 0xFF;
-        EDX += TABLE[ECX as usize] as u32;
-
-
-        ECX = Local6 & 0xFF;
-        let j = EDX as u64 + TABLE[ECX as usize];
-        let k = j % 0x100000000;
-        // EDX += TABLE[ECX as usize] as u32;
-        EDX = k as u32;
-
-
-        ECX = AL as u32;
-        EDI = TABLE[ECX as usize + 0xD] as u32;
-
-
-        ECX = AL as u32;
-        ECX = TABLE[ECX as usize] as u32;
-        let h = ECX as u64 + Local3 as u64;
-        let i = h % 0x100000000;
-        // ECX += Local3;
-        ECX = i as u32;
-
-        EDI ^= ECX;
-        let a = EDI as u64;
-        let b = TABLE[AL as usize + 0x2F];
-        let c = a * b;
-        let d = c % 0x100000000;
-        println!("a: {:X}, b: {:X}, c: {:X}, d: {:X}", a, b, c, d);
-        // EDI = ((EDI as u64 * TABLE[AL as usize + 0x2F]) % 0x100000000) as u32;
-        EDI = d as u32;
-
-        println!("EDX: {:X}, EDI: {:X}", EDX, EDI);
-        let f = EDX as u64 + d;
-        let g = f % 0x100000000;
-        // EDX = EDX + EDI;
-        EDX = g as u32;
-        Local3 = EDX;
-
-
-        Local7 += 0x13;
-        Local8 += 0x7;
-        Local6 += 0x9;
-        Local5 += 0xD;
-        Local4 += 1;
-        Length -= 1;
-    }
-    return Local3;
-}
-
-fn keygen(UserName: &str, LicenseType: u32, UserCounts: u32) -> String
-{
-    let mut SI = 0;
-    let mut Key = [0; 10];
-    let mut KeyString = "".to_string();
-
-    if UserName.is_empty() || LicenseType > 2 {
-        return KeyString;
-    }
-
-    match LicenseType
-    {
-        // LICENSE_TYPE_SINGLE_USER:
-        1 => SI = 1,
-        // LICENSE_TYPE_SITE:
-        2 => SI = 0x3E8,
-        // LICENSE_TYPE_MULTI_USER:
-        _ => if SI == 0 || SI >= 1000 {
-            let mut rng = rand::thread_rng();
-            SI = rng.gen_range(1..1000);
-        } else {
-            SI = UserCounts;
-        }
-    }
-
-    let mut EDX = SI;
-    Key[3] = 0xAC;
-    let MagicNumber = magic_calculation(UserName, SI);
-
-    Key[4] = MagicNumber & 0xFF;
-
-    Key[5] = (MagicNumber >> 0x8) & 0xFF;
-
-    Key[6] = (MagicNumber >> 0x10) & 0xFF;
-
-    Key[7] = (MagicNumber >> 0x18) & 0xFF;
-
-    //let a = ((((SI as u128 * 0xB) ^ 0x3421) - 0x4D30) ^ 0x7892) % 0x100000000;
-    let a = SI as u64 * 0xB;
-    let b = a as i64 ^ 0x3421;
-    let c = b - 0x4D30;
-    let d = c ^ 0x7892;
-    // let EBX = (((((SI as u64 * 0xB) ^ 0x3421) - 0x4D30) ^ 0x7892) % 0x100000000) as u32;
-    let EBX = d as u32;
-    EDX = EBX;
-    EDX = EDX >> 8;
-
-    Key[1] = (EDX & 0xFF) ^ Key[7];
-
-    Key[2] = (EBX & 0xFF) ^ Key[5];
-
-
-    Key[0] = (0xFF95D981 & 0xFF) ^ Key[6];
-
-    Key[8] = ((0xFF95D981 >> 8) & 0xFF) ^ Key[4];
-
-    Key[9] = ((0xFF95D981 >> 0x10) & 0xFF) ^ Key[5];
-
-    for v in Key {
-        let s = format!("{:02X}", v).to_string();
-        KeyString += s.as_str();
-    }
-
-    return KeyString;
-}
 
 fn CalulateChecksum(utf8_UserName: &str, IsRegistrationVersion: bool, a3: u32, LicenseCount: u32) -> Result<u32, String> {
     let mut result = 0;
@@ -341,8 +132,6 @@ fn generate_time_license(UserName: &str, DaystampOfExpiration: u32, LicenseCount
     // Type
     Password[3] = 0xAC;
 
-    println!("\n\n------ Password: {:?}", Password);
-
     let mut ret = "".to_string();
     for (i, v) in Password.iter().enumerate() {
         if i % 2 == 0 && i != 0 {
@@ -355,58 +144,17 @@ fn generate_time_license(UserName: &str, DaystampOfExpiration: u32, LicenseCount
 }
 
 fn main() {
-    println!("Hello, world!");
-    let mut p = [0u64; 8];
-    p[3] = 0x9c;
-    // p[3] = 0xac;
-    // v9: Users counts
-    // 1 - Single User License
-    // 2 ~ 999 - Multiuser License
-    // 1000 - Site License
-    let v9 = 1000; // Single License
-    let v8 = magic_number(v9);
-    println!("v8, v9 = {}, {}", v8, v9);
-    // let user = user_pro("Tommy Lau", true, 0, v9);
-    let user = user_pro("Tommy Lau", true, 0, v9);
-    println!("old magic: {:X}", user);
-    let magic = magic_calculation("Tommy Lau", v9 as u32);
-    println!("new magic: {:X}", magic);
-    let key = keygen("Tommy Lau", 1, 1);
-    assert_eq!(key, "4589DFAC9CB7C4174522");
-    println!("New Key: {}", key);
-    p[4] = user % 0x100;
-    p[5] = (user >> 8) % 0x100;
-    p[6] = (user >> 16) % 0x100;
-    p[7] = (user >> 24) % 0x100;
-
-    p[2] = p[5] ^ (v8 % 0x100);
-    p[1] = p[7] ^ (v8 >> 8);
-
-    let mut rng = rand::thread_rng();
-    loop {
-        p[0] = rng.gen_range(0..256);
-        let v10 = (((p[6] ^ p[0]) ^ 0x18 + 61) % 0x100) ^ 0xa7;
-        if v10 >= 10 { break; }
-    }
-
-    for (i, v) in p.iter().enumerate() {
-        if i % 2 == 0 && i != 0 {
-            print!("-");
-        }
-        print!("{:02X}", v);
-    }
-    println!("\n");
-    // print!("-{:2X}", 0xd9 ^ p[4]);
-    // println!("{:2X}", 0x95 ^ p[5]);
-    // Expiration: Dec 31, 2099
-    static EXP: u32 = 47480;
-    let a: Vec<String> = std::env::args().collect();
-    let exp = if a.len() > 1 {
-        match a[1].parse::<u32>() {
+    // Expiration date: Dec 31, 2099
+    let expiration_day = Utc.ymd(2099, 12, 31);
+    let datetime_1970 = Utc.ymd(1970, 1, 1);
+    let duration_days = (expiration_day - datetime_1970).num_days() as u32 - 1;
+    let args: Vec<String> = std::env::args().collect();
+    let exp = if args.len() > 1 {
+        match args[1].parse::<u32>() {
             Ok(v) => v,
-            _ => EXP,
+            _ => duration_days,
         }
-    } else { EXP };
+    } else { duration_days };
     println!("Exp: {}", exp);
     let key = generate_time_license("Tommy Lau", exp, 1000);
     println!("Key: {}", key);
