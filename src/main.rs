@@ -1,6 +1,7 @@
+use std::ops::BitXor;
 use chrono::{TimeZone, Utc};
 
-static TABLE: [u64; 256] = [
+static TABLE: [u32; 256] = [
     0x39cb44b8, 0x23754f67, 0x5f017211, 0x3ebb24da, 0x351707c6, 0x63f9774b, 0x17827288, 0x0fe74821,
     0x5b5f670f, 0x48315ae8, 0x785b7769, 0x2b7a1547, 0x38d11292, 0x42a11b32, 0x35332244, 0x77437b60,
     0x1eab3b10, 0x53810000, 0x1d0212ae, 0x6f0377a8, 0x43c03092, 0x2d3c0a8e, 0x62950cbf, 0x30f06ffa,
@@ -35,32 +36,33 @@ static TABLE: [u64; 256] = [
     0x5cff0261, 0x33ae061e, 0x3bb6345f, 0x5d814a75, 0x257b5df4, 0x0a5c2c5b, 0x16a45527, 0x16f23945
 ];
 
-fn calculate_checksum(user_name: &str, registration_version: bool, a3: u32, license_count: u32) -> Result<u32, String> {
-    let mut result = 0;
-    let mut unk0 = (17 * a3 as usize) % 0x100;
-    let mut unk1 = (15 * license_count as usize) % 0x100;
-    let mut j = 0usize;
+fn calculate_checksum(user_name: &str, registration_version: bool, a3: u32, license_count: u16) -> Result<u32, String> {
+    let mut result: u32 = 0;
+    let mut unk0 = (a3 as u8).wrapping_mul(17);
+    let mut unk1 = (license_count as u8).wrapping_mul(15);
+    let mut j = 0u8;
     for cur in user_name.to_uppercase().bytes().map(|x| x as usize) {
-        let temp = (result + TABLE[cur]) % 0x100000000;
+        let temp = result.wrapping_add(TABLE[cur]);
         if registration_version {
-            result = TABLE[j] + TABLE[unk1] +
-                TABLE[unk0] +
-                TABLE[(cur + 0x2F) % 256] * (temp ^ TABLE[(cur + 0xD) % 256]);
-            j += 19;
+            result = TABLE[j as usize]
+                .wrapping_add(TABLE[unk1 as usize])
+                .wrapping_add(TABLE[unk0 as usize])
+                .wrapping_add(TABLE[(cur + 0x2F) & 0xFF]
+                    .wrapping_mul(temp ^ TABLE[(cur + 0xD) & 0xFF]));
+            j = j.wrapping_add(19);
         } else {
-            result = TABLE[j] + TABLE[unk1] +
-                TABLE[unk0] +
-                TABLE[(cur + 0x17) % 256] * (temp ^ TABLE[(cur + 0x3F) % 256]);
-            j += 7;
+            result = TABLE[j as usize]
+                .wrapping_add(TABLE[unk1 as usize])
+                .wrapping_add(TABLE[unk0 as usize])
+                .wrapping_add(TABLE[(cur + 0x17) & 0xFF]
+                    .wrapping_mul(temp ^ TABLE[(cur + 0x3F) & 0xFF]));
+            j = j.wrapping_add(7);
         }
-        unk1 += 13;
-        unk0 += 9;
-        unk1 %= 0x100;
-        unk0 %= 0x100;
-        result %= 0x100000000;
+        unk1 = unk1.wrapping_add(13);
+        unk0 = unk0.wrapping_add(9);
     }
 
-    Ok(result as u32)
+    Ok(result)
 }
 
 fn encode_expire_date(daystamp_of_expiration: u32, seed: u32) -> Result<u32, String> {
@@ -68,21 +70,19 @@ fn encode_expire_date(daystamp_of_expiration: u32, seed: u32) -> Result<u32, Str
         return Err("Days exceed 0x1000000".into());
     }
 
-    let mut result = daystamp_of_expiration * 0x11;
+    let mut result = daystamp_of_expiration.wrapping_mul(0x11);
     while result < 0xFF000000 {
         result += 0x1000000;
     }
 
     loop {
-        let mut temp = result;
-        temp ^= 0xFFE53167;
-        temp += 0x2C175;
-        temp ^= 0x22C078;
-        temp ^= seed;
+        let temp = result.bitxor(0xFFE53167)
+            .wrapping_add(0x2C175)
+            .bitxor(0x22C078)
+            .bitxor(seed);
 
         if temp >= 0x1000000 {
             result += 0x1000000;
-            continue;
         } else {
             result = temp;
             break;
@@ -92,22 +92,21 @@ fn encode_expire_date(daystamp_of_expiration: u32, seed: u32) -> Result<u32, Str
     Ok(result)
 }
 
-fn encode_license_count(desired_license_count: u32) -> Result<u16, String> {
+fn encode_license_count(desired_license_count: u16) -> Result<u16, String> {
     if desired_license_count > 1000 || desired_license_count == 0 {
         return Err("Desired license count incorrect".into());
     }
 
-    let ret = (desired_license_count * 11) % 0x10000;
-    let mut ret = ret as i16;
-    ret ^= 0x3421;
-    ret -= 0x4d30;
-    ret ^= 0x7892;
-    // ret %= 0x10000;
+    let ret = desired_license_count
+        .wrapping_mul(11)
+        .bitxor(0x3421)
+        .wrapping_sub(0x4d30)
+        .bitxor(0x7892);
 
-    Ok(ret as u16)
+    Ok(ret)
 }
 
-fn generate_time_license(user_name: &str, daystamp_of_expiration: u32, license_count: u32) -> String {
+fn generate_time_license(user_name: &str, daystamp_of_expiration: u32, license_count: u16) -> String {
     let mut password = [0u8; 10];
 
     let password_checksum = calculate_checksum(user_name, true, daystamp_of_expiration, license_count).unwrap().to_le_bytes();
@@ -128,9 +127,9 @@ fn generate_time_license(user_name: &str, daystamp_of_expiration: u32, license_c
     let mut ret = "".to_string();
     for (i, v) in password.iter().enumerate() {
         if i % 2 == 0 && i != 0 {
-            ret += "-";
+            ret = format!("{}-", ret);
         }
-        ret += format!("{:02X}", v).as_str();
+        ret = format!("{}{:02X}", ret, v);
     }
 
     ret
@@ -142,15 +141,17 @@ fn main() {
     let datetime_1970 = Utc.ymd(1970, 1, 1);
     let duration_days = (expiration_day - datetime_1970).num_days() as u32 - 1;
     let args: Vec<String> = std::env::args().collect();
-    let exp = if args.len() > 1 {
+    let expiration = if args.len() > 1 {
         match args[1].parse::<u32>() {
             Ok(v) => v,
             _ => duration_days,
         }
     } else { duration_days };
-    println!("Exp: {}", exp);
-    let key = generate_time_license("Tommy Lau", exp, 1000);
-    println!("Key: {}", key);
+
+    let username = "Tommy Lau";
+    let password = generate_time_license("Tommy Lau", expiration, 1000);
+    println!("Username: {}", username);
+    println!("Password: {}", password);
 }
 
 /*
