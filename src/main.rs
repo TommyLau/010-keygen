@@ -223,9 +223,9 @@ fn main() {
 
     // Cannot parse correctly if no "TIME" is giving, add "0000" as time 00:00 to avoid the problem
     let datetime = Utc.datetime_from_str(&(cli.date + "0000"), "%Y-%m-%d%H%M");
-    let expiration_day = if datetime.is_ok() {
+    let expiration_day = if let Ok(datetime) = datetime {
         // Convert the string into DateTime<Utc>
-        datetime.unwrap().date()
+        datetime.date()
     } else {
         // Expiration date: Dec 31, 2099
         Utc.ymd(2099, 12, 31)
@@ -242,6 +242,12 @@ fn main() {
 
     let username = cli.username.as_str();
     println!("Username: {}", username);
+    print!("License Type: {:?} / {:?}", cli.type_, cli.users);
+    if cli.users == LicenseUsers::Multiple {
+        println!(", Count: {}", license_count);
+    } else {
+        println!();
+    }
 
     match cli.type_ {
         LicenseType::Evaluation => {
@@ -251,10 +257,12 @@ fn main() {
         LicenseType::Version => {
             let major_version = cli.major;
             let version_license = generate_version_license(username, license_count, major_version);
+            println!("Major Version: {}", major_version);
             println!("Version License: {}", version_license);
         }
         LicenseType::Time => {
             let time_license = generate_time_license(username, expiration, license_count);
+            println!("Expiration Date: {}", expiration_day);
             println!("Time License: {}", time_license);
         }
     }
