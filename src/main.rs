@@ -1,6 +1,7 @@
 use std::ops::BitXor;
 use chrono::{TimeZone, Utc};
-use clap::Parser;
+use clap::{ArgEnum, Parser};
+use std::ops::RangeInclusive;
 
 static TABLE: [u32; 256] = [
     0x39cb44b8, 0x23754f67, 0x5f017211, 0x3ebb24da, 0x351707c6, 0x63f9774b, 0x17827288, 0x0fe74821,
@@ -37,12 +38,37 @@ static TABLE: [u32; 256] = [
     0x5cff0261, 0x33ae061e, 0x3bb6345f, 0x5d814a75, 0x257b5df4, 0x0a5c2c5b, 0x16a45527, 0x16f23945
 ];
 
+#[derive(Copy, Clone, PartialEq, Eq, PartialOrd, Ord, ArgEnum, Debug)]
+enum LicenseType {
+    Evaluation,
+    Version,
+    Time,
+}
+
+#[derive(Copy, Clone, PartialEq, Eq, PartialOrd, Ord, ArgEnum, Debug)]
+enum LicenseUsers {
+    Single,
+    Multiple,
+    Site,
+}
+
 #[derive(Parser, Debug)]
 #[clap(author, version, about, long_about = None)]
 struct Cli {
     /// User name to generate license
-    #[clap(short, long)]
-    name: String,
+    username: String,
+    /// License type to generate
+    #[clap(short, long, arg_enum, default_value_t = LicenseType::Time)]
+    type_: LicenseType,
+    /// License users
+    #[clap(short, long, arg_enum, default_value_t = LicenseUsers::Site)]
+    users: LicenseUsers,
+    /// Major version when using "Version License"
+    #[clap(short, long, parse(try_from_str), default_value_t = 12)]
+    major: u8,
+    /// User counts when using "Multiple License"
+    #[clap(short, long, parse(try_from_str = user_in_range))]
+    counts: Option<u16>,
 }
 
 fn format_password(password: &[u8]) -> String {
@@ -204,14 +230,48 @@ fn main() {
         }
     } else { duration_days };
 
-    let username = cli.name.as_str();
-    let time_license = generate_time_license(username, expiration, 1000);
-    let version_license = generate_version_license(username, 1000, 12);
-    let evaluation_license = generate_evaluation_license(username, expiration);
+    // Calculate license user counts
+    let license_count = match cli.users {
+        LicenseUsers::Single => 1,
+        LicenseUsers::Multiple => if let Some(c) = cli.counts { c } else { 999 },
+        LicenseUsers::Site => 1000,
+    };
+
+    let username = cli.username.as_str();
     println!("Username: {}", username);
-    println!("Time License: {}", time_license);
-    println!("Version License: {}", version_license);
-    println!("Evaluation License: {}", evaluation_license);
+
+    match cli.type_ {
+        LicenseType::Evaluation => {
+            let evaluation_license = generate_evaluation_license(username, expiration);
+            println!("Evaluation License: {}", evaluation_license);
+        }
+        LicenseType::Version => {
+            let major_version = cli.major;
+            let version_license = generate_version_license(username, license_count, major_version);
+            println!("Version License: {}", version_license);
+        }
+        LicenseType::Time => {
+            let time_license = generate_time_license(username, expiration, license_count);
+            println!("Time License: {}", time_license);
+        }
+    }
+}
+
+const USER_RANGE: RangeInclusive<u16> = 2..=999;
+
+fn user_in_range(s: &str) -> Result<u16, String> {
+    let counts: u16 = s
+        .parse()
+        .map_err(|_| format!("`{}` isn't a valid user counts", s))?;
+    if USER_RANGE.contains(&counts) {
+        Ok(counts)
+    } else {
+        Err(format!(
+            "User counts not in range {}-{}",
+            USER_RANGE.start(),
+            USER_RANGE.end()
+        ))
+    }
 }
 
 /*
