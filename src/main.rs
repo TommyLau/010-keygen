@@ -1,5 +1,6 @@
 use std::ops::BitXor;
 use chrono::{TimeZone, Utc};
+use clap::Parser;
 
 static TABLE: [u32; 256] = [
     0x39cb44b8, 0x23754f67, 0x5f017211, 0x3ebb24da, 0x351707c6, 0x63f9774b, 0x17827288, 0x0fe74821,
@@ -35,6 +36,14 @@ static TABLE: [u32; 256] = [
     0x65e04849, 0x1f526e1c, 0x5a0251b6, 0x2bd73f69, 0x2dbf7acd, 0x51e63e80, 0x5cf2670f, 0x21cd0a03,
     0x5cff0261, 0x33ae061e, 0x3bb6345f, 0x5d814a75, 0x257b5df4, 0x0a5c2c5b, 0x16a45527, 0x16f23945
 ];
+
+#[derive(Parser, Debug)]
+#[clap(author, version, about, long_about = None)]
+struct Cli {
+    /// User name to generate license
+    #[clap(short, long)]
+    name: String,
+}
 
 fn format_password(password: &[u8]) -> String {
     let mut ret = "".into();
@@ -180,6 +189,9 @@ fn generate_time_license(user_name: &str, daystamp_of_expiration: u32, license_c
 }
 
 fn main() {
+    // Parse command line
+    let cli = Cli::parse();
+
     // Expiration date: Dec 31, 2099
     let expiration_day = Utc.ymd(2099, 12, 31);
     let datetime_1970 = Utc.ymd(1970, 1, 1);
@@ -192,7 +204,7 @@ fn main() {
         }
     } else { duration_days };
 
-    let username = "Tommy Lau";
+    let username = cli.name.as_str();
     let time_license = generate_time_license(username, expiration, 1000);
     let version_license = generate_version_license(username, 1000, 12);
     let evaluation_license = generate_evaluation_license(username, expiration);
@@ -204,15 +216,15 @@ fn main() {
 
 /*
 enum ReleaseDaystamp {
-        Version12 = 18887,
-        Version11 = 18535,
-        Version10 = 18236,
-        Version9 = 17814,
-        Version8 = 17289,
-        Version7 = 16883,
-        Version6 = 16420,
-        Version5 = 15880,
-        Version4 = 15474,
-        Version3 = 14018
-    };
+    Version12 = 18887,
+    Version11 = 18535,
+    Version10 = 18236,
+    Version9 = 17814,
+    Version8 = 17289,
+    Version7 = 16883,
+    Version6 = 16420,
+    Version5 = 15880,
+    Version4 = 15474,
+    Version3 = 14018,
+};
  */
