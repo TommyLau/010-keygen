@@ -222,6 +222,7 @@ fn main() {
     let cli = Cli::parse();
 
     // Cannot parse correctly if no "TIME" is giving, add "0000" as time 00:00 to avoid the problem
+    // Reference: https://github.com/chronotope/chrono/issues/72
     let datetime = Utc.datetime_from_str(&(cli.date + "0000"), "%Y-%m-%d%H%M");
     let expiration_day = if let Ok(datetime) = datetime {
         // Convert the string into DateTime<Utc>

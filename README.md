@@ -1,4 +1,54 @@
-## Usage
+# 010 Keygen - Rust
+
+A 010 Editor Keygen written in Rust.
+
+## Command Line Usage
+
+```
+USAGE:
+    keygen [OPTIONS] <USERNAME>
+
+ARGS:
+    <USERNAME>    User name to generate license
+
+OPTIONS:
+    -c, --counts <COUNTS>    User counts when using "Multiple License"
+    -d, --date <DATE>        Date when using "Time License" [default: 2099-12-31]
+    -h, --help               Print help information
+    -m, --major <MAJOR>      Major version when using "Version License" [default: 12]
+    -t, --type <TYPE>        License type to generate [default: time] [possible values: evaluation,
+                             version, time]
+    -u, --users <USERS>      License users [default: site] [possible values: single, multiple, site]
+    -V, --version            Print version information
+```
+
+### Examples
+
+Generate a site license with default setting:
+
+```
+./keygen "Your Name"
+```
+
+Generate a single user license:
+
+```
+./keygen --users single "Your Name"
+```
+
+Generate a multiple user license:
+
+```
+./keygen --users multiple --counts 888 "Your Name"
+```
+
+A more complex example to generate a `Time License` with `Multiple License` of `888` users which expiration date is `Dec 31, 2088`.
+
+```
+./keygen --type time --users multiple --counts 888 --date 2088-12-31 "Your Name"
+```
+
+## Source Code Usage
 
 ### Generate Evaluation License
 
