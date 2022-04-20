@@ -69,6 +69,9 @@ struct Cli {
     /// User counts when using "Multiple License"
     #[clap(short, long, parse(try_from_str = user_in_range))]
     counts: Option<u16>,
+    /// Date when using "Time License"
+    #[clap(short, long, parse(try_from_str), default_value = "2099-12-31")]
+    date: String,
 }
 
 fn format_password(password: &[u8]) -> String {
@@ -218,17 +221,17 @@ fn main() {
     // Parse command line
     let cli = Cli::parse();
 
-    // Expiration date: Dec 31, 2099
-    let expiration_day = Utc.ymd(2099, 12, 31);
+    // Cannot parse correctly if no "TIME" is giving, add "0000" as time 00:00 to avoid the problem
+    let datetime = Utc.datetime_from_str(&(cli.date + "0000"), "%Y-%m-%d%H%M");
+    let expiration_day = if datetime.is_ok() {
+        // Convert the string into DateTime<Utc>
+        datetime.unwrap().date()
+    } else {
+        // Expiration date: Dec 31, 2099
+        Utc.ymd(2099, 12, 31)
+    };
     let datetime_1970 = Utc.ymd(1970, 1, 1);
-    let duration_days = (expiration_day - datetime_1970).num_days() as u32 - 1;
-    let args: Vec<String> = std::env::args().collect();
-    let expiration = if args.len() > 1 {
-        match args[1].parse::<u32>() {
-            Ok(v) => v,
-            _ => duration_days,
-        }
-    } else { duration_days };
+    let expiration = (expiration_day - datetime_1970).num_days() as u32 - 1;
 
     // Calculate license user counts
     let license_count = match cli.users {
